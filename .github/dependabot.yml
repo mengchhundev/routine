@@ -1,0 +1,47 @@
+# Opens pull requests for dependency updates, so security fixes arrive as a
+# reviewable diff rather than being discovered by an audit. Each PR runs the
+# Deploy workflow's tests and image builds before it can be merged.
+#
+# Security alerts themselves are enabled separately, under
+# Settings → Code security → Dependabot alerts / security updates.
+
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    groups:
+      # Next and React ship matched fixes; update them together.
+      next-react:
+        patterns: ["next", "react", "react-dom", "@types/react", "@types/react-dom"]
+      tailwind:
+        patterns: ["tailwindcss", "@tailwindcss/*"]
+    ignore:
+      # Next 16 is a breaking upgrade (middleware changes) and needs its own
+      # migration, so only patches and minors are proposed automatically.
+      - dependency-name: next
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: maven
+    directory: /backend
+    schedule:
+      interval: weekly
+    ignore:
+      # Spring Boot 4 is a breaking upgrade; stay on the supported 3.x line.
+      - dependency-name: org.springframework.boot:spring-boot-starter-parent
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: docker
+    directories: ["/backend", "/frontend"]
+    schedule:
+      interval: weekly

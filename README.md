@@ -150,7 +150,7 @@ and use the `test` profile from
 
 ```text
 routine/
-├── backend/            Spring Boot 3.4 · Java 21 · PostgreSQL 16 · Flyway
+├── backend/            Spring Boot 3.5 · Java 21 · PostgreSQL 16 · Flyway
 │   └── src/main/java/com/routine/
 │       ├── auth/       registration, login, JWT, refresh-token rotation
 │       ├── user/       profile and settings

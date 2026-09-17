@@ -29,7 +29,14 @@ FROM node:22-alpine AS production
 WORKDIR /app
 ENV NODE_ENV=production
 
-RUN addgroup -S nodejs && adduser -S nextjs -G nodejs
+# Security fixes released since the base image was built, and no package
+# managers: the server runs `node server.js` and never installs anything, so
+# npm, npx, corepack and yarn are attack surface with nothing to offset it.
+RUN apk upgrade --no-cache \
+ && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+           /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+           /opt/yarn-* /usr/local/bin/yarn /usr/local/bin/yarnpkg \
+ && addgroup -S nodejs && adduser -S nextjs -G nodejs
 
 COPY --from=build /app/public ./public
 COPY --from=build --chown=nextjs:nodejs /app/.next/standalone ./

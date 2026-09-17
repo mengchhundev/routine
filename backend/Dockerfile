@@ -13,7 +13,11 @@ RUN mvn -B -DskipTests package
 FROM eclipse-temurin:21-jre AS runtime
 WORKDIR /app
 
-RUN useradd --system --uid 10001 routine
+# The Ubuntu base ships Canonical's Pebble service manager, built with its own
+# Go toolchain and carrying that toolchain's CVEs. The container runs java as
+# its entrypoint and never uses it.
+RUN rm -f /usr/bin/pebble \
+ && useradd --system --uid 10001 routine
 USER routine
 
 COPY --from=build /build/target/routine-api-0.1.0.jar app.jar
