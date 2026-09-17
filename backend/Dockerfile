@@ -17,7 +17,7 @@ COPY src ./src
 RUN mvn -B -DskipTests package
 
 # ----------------------------------------------------------------- run -----
-FROM eclipse-temurin:21-jre@sha256:6cbdfc89c9657478bc5abea638030310f6c0267404e98a5808097bb1925932f1 AS runtime
+FROM eclipse-temurin:25-jre@sha256:611e326900ba9edcedfb246ede24efc66a911fa496ac623db9f33cae88a2d83b AS runtime
 WORKDIR /app
 
 # The Ubuntu base ships Canonical's Pebble service manager, built with its own
