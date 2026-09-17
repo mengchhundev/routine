@@ -79,9 +79,43 @@ jobs:
           TEST_DB_PASSWORD: routine
         run: mvn -B test
 
+  dependencies:
+    name: Dependency audit
+    if: ${{ !inputs.image_tag }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+
+      # Exactly what package-lock.json records, with install scripts off
+      # (frontend/.npmrc), then: no known HIGH/CRITICAL advisories, and every
+      # package carries a valid npm registry signature.
+      - name: Frontend packages
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm audit --audit-level=high
+          npm audit signatures
+
+      # A second, independent advisory database (OSV) over both ecosystems,
+      # including the backend's transitive Maven dependencies. Fails on any
+      # known vulnerability with a fix available.
+      - name: OSV-Scanner
+        run: |
+          docker run --rm -v "$PWD:/src:ro" \
+            ghcr.io/google/osv-scanner@sha256:afd838850ac1a0fcc15ff4a041dc9ba11123c3f0d2666217a5f0fcf9222b55fa \
+            scan source -L /src/frontend/package-lock.json -L /src/backend/pom.xml
+
   build:
     name: Build ${{ matrix.name }} image
-    needs: test
+    needs: [test, dependencies]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

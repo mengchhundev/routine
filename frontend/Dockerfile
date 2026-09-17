@@ -1,20 +1,28 @@
+# Base images are pinned by digest as well as tag: a tag can be re-pointed at
+# different contents, a digest cannot. Dependabot proposes digest updates.
+#
+# Dependencies are installed with `npm ci`, which installs exactly what
+# package-lock.json records (registry URL and sha512 integrity included) and
+# fails rather than resolving anything new. Install scripts are disabled by
+# .npmrc, so no dependency runs code at install time.
+
 # ---------------------------------------------------------- development ----
-FROM node:22-alpine AS development
+FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS development
 WORKDIR /app
 
-COPY package.json package-lock.json* ./
-RUN npm install
+COPY package.json package-lock.json .npmrc ./
+RUN npm ci --no-audit --no-fund
 
 COPY . .
 EXPOSE 3000
 CMD ["npm", "run", "dev"]
 
 # ----------------------------------------------------------- build --------
-FROM node:22-alpine AS build
+FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS build
 WORKDIR /app
 
-COPY package.json package-lock.json* ./
-RUN npm ci || npm install
+COPY package.json package-lock.json .npmrc ./
+RUN npm ci --no-audit --no-fund
 
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -25,7 +33,7 @@ ENV API_INTERNAL_URL=$API_INTERNAL_URL
 RUN npm run build
 
 # --------------------------------------------------------- production -----
-FROM node:22-alpine AS production
+FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS production
 WORKDIR /app
 ENV NODE_ENV=production
 

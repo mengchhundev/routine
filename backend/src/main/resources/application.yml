@@ -37,7 +37,9 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        # Health for the container healthcheck, info for the version. Nothing
+        # else: metrics and the rest describe internals no client needs.
+        include: health,info
   endpoint:
     health:
       probes:

@@ -9,7 +9,7 @@ name: routine
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-routine}
       POSTGRES_USER: ${POSTGRES_USER:-routine}
@@ -28,7 +28,7 @@ services:
   redis:
     # Not used by the MVP. It is here so reminder queues, rate limiting and
     # dashboard caching have somewhere to land without a compose change later.
-    image: redis:7-alpine
+    image: redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
     command: ["redis-server", "--save", "", "--appendonly", "no"]
     ports:
       - "${REDIS_PORT:-6379}:6379"
@@ -88,7 +88,7 @@ services:
   # Started only by `make test` (compose profile "test"). On a tmpfs, so every
   # run migrates a genuinely empty database and nothing survives the container.
   postgres-test:
-    image: postgres:16-alpine
+    image: postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
     profiles: ["test"]
     environment:
       POSTGRES_DB: routine_test

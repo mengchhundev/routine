@@ -9,6 +9,8 @@
 #   docker compose -f docker-compose.prod.yml ps
 #   docker compose -f docker-compose.prod.yml logs -f api
 
+# Third-party images are pinned by digest; Dependabot proposes updates.
+
 name: routine
 
 x-logging: &logging
@@ -20,7 +22,7 @@ x-logging: &logging
 
 services:
   caddy:
-    image: caddy:2-alpine
+    image: caddy:2-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
     restart: unless-stopped
     ports:
       - "80:80"
@@ -90,7 +92,7 @@ services:
     logging: *logging
 
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-routine}

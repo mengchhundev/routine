@@ -1,9 +1,14 @@
 # Opens pull requests for dependency updates, so security fixes arrive as a
 # reviewable diff rather than being discovered by an audit. Each PR runs the
-# Deploy workflow's tests and image builds before it can be merged.
+# Deploy workflow's tests, dependency audit and image builds before merging.
 #
 # Security alerts themselves are enabled separately, under
 # Settings → Code security → Dependabot alerts / security updates.
+#
+# Cooldown: a newly published version is only proposed after it has been
+# public for a week. Malicious releases are usually caught and pulled within
+# days, so this keeps a hijacked package from reaching a PR. Security updates
+# are not delayed by it.
 
 version: 2
 
@@ -12,6 +17,8 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       actions:
         patterns: ["*"]
@@ -20,6 +27,8 @@ updates:
     directory: /frontend
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       # Next and React ship matched fixes; update them together.
       next-react:
@@ -36,12 +45,25 @@ updates:
     directory: /backend
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     ignore:
       # Spring Boot 4 is a breaking upgrade; stay on the supported 3.x line.
       - dependency-name: org.springframework.boot:spring-boot-starter-parent
         update-types: ["version-update:semver-major"]
 
+  # Base images in the Dockerfiles, pinned by digest.
   - package-ecosystem: docker
     directories: ["/backend", "/frontend"]
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
+
+  # Caddy, PostgreSQL and Redis in the compose files, pinned by digest.
+  - package-ecosystem: docker-compose
+    directories: ["/", "/infrastructure/docker"]
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7

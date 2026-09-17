@@ -25,7 +25,29 @@
              managed version catches up. -->
         <tomcat.version>10.1.60</tomcat.version>
         <postgresql.version>42.7.13</postgresql.version>
+        <jackson-bom.version>2.21.6</jackson-bom.version>
+        <!-- The 2.24 line has no fix; only log4j-api is used, via the SLF4J bridge. -->
+        <log4j2.version>2.25.5</log4j2.version>
     </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- Hibernate brings jandex 3.2.0, whose PGP signing key has been
+                 revoked, so its authenticity can no longer be verified. The
+                 latest patch on the same line is signed with a valid key. -->
+            <dependency>
+                <groupId>io.smallrye</groupId>
+                <artifactId>jandex</artifactId>
+                <version>3.2.7</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+    <!-- Signature audit (pgpverify-maven-plugin): every signed artifact
+         verifies. One runtime dependency is unsigned upstream and accepted:
+         org.hibernate.common:hibernate-commons-annotations, which Hibernate has
+         never signed in any 7.x release. It is an official Hibernate artifact,
+         Maven Central does not allow published files to be replaced, and
+         .mvn/maven.config fails the build on a checksum mismatch. -->
 
     <dependencies>
         <dependency>
@@ -92,15 +114,39 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
-        <dependency>
-            <groupId>org.springframework.security</groupId>
-            <artifactId>spring-security-test</artifactId>
-            <scope>test</scope>
-        </dependency>
     </dependencies>
 
     <build>
         <plugins>
+            <!-- Supply-chain guards, checked at the start of every build. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>supply-chain</id>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <!-- Dependencies and plugins come from Maven Central only. -->
+                                <requireNoRepositories>
+                                    <message>Only Maven Central is allowed. Do not add repositories.</message>
+                                </requireNoRepositories>
+                                <!-- No SNAPSHOTs, ranges or LATEST: a build resolves the same artifacts every time. -->
+                                <banDynamicVersions/>
+                                <requireMavenVersion>
+                                    <version>[3.9,)</version>
+                                </requireMavenVersion>
+                                <requireJavaVersion>
+                                    <version>[21,)</version>
+                                </requireJavaVersion>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
