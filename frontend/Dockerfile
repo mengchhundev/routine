@@ -18,6 +18,10 @@ RUN npm ci || npm install
 
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
+# The middleware reads this. Set at build time as well as run time, so the
+# production image reaches the API by its compose service name either way.
+ARG API_INTERNAL_URL=http://api:8080
+ENV API_INTERNAL_URL=$API_INTERNAL_URL
 RUN npm run build
 
 # --------------------------------------------------------- production -----

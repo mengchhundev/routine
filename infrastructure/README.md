@@ -1,16 +1,20 @@
 # Infrastructure
 
-Empty for now by design — Milestone 1 runs entirely from `docker-compose.yml` at
-the repository root, and the project plan is explicit that operational
-complexity should arrive only when it is justified.
+Production runs as containers on a single GCP VM, deployed by
+[.github/workflows/deploy.yml](../.github/workflows/deploy.yml). Setup,
+secrets, rollback and backups are in
+[docs/operations/deployment.md](../docs/operations/deployment.md).
 
-| Directory | Holds | Arrives with |
-| --- | --- | --- |
-| `docker/` | Production compose file, image build config | Milestone 6 |
-| `deployment/` | Staging and production deployment config | Milestone 6 |
-| `monitoring/` | Dashboards, alert rules, log pipeline config | Milestone 6 |
-| `database/` | Backup, restore and retention scripts | Milestone 6 |
+| Directory | Holds |
+| --- | --- |
+| `docker/` | `docker-compose.prod.yml` (Caddy, web, api, PostgreSQL) and the `Caddyfile` |
+| `deployment/` | `setup-vm.sh` (one-time VM preparation) and `deploy.sh` (run on the VM by each deploy) |
+| `monitoring/` | Empty: dashboards, alert rules, log pipeline config |
+| `database/` | Empty: backup, restore and retention scripts |
 
-The target initial production topology is Cloudflare → load balancer → Next.js
-and Spring Boot → PostgreSQL and Redis. Kubernetes is explicitly *not* the
-starting point.
+Local development does not use anything here; it runs from the
+`docker-compose.yml` at the repository root.
+
+The topology is deliberately small: Caddy → Next.js → Spring Boot → PostgreSQL
+on one machine. Redis, managed databases and Kubernetes arrive only when usage
+justifies them.

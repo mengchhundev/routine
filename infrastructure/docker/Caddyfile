@@ -1,0 +1,22 @@
+# TLS termination and the only public entry point. Caddy obtains and renews a
+# Let's Encrypt certificate for $DOMAIN on its own, which needs the domain's
+# DNS A record pointing at this VM and ports 80 and 443 open.
+
+{
+	email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	# Everything goes to Next. The browser never talks to the API directly:
+	# Next's route handlers proxy to it over the compose network.
+	reverse_proxy web:3000
+}

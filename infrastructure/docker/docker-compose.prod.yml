@@ -1,0 +1,113 @@
+# Production stack for a single VM. Deployed by .github/workflows/deploy.yml,
+# which copies this file, the Caddyfile and deploy.sh to /opt/routine and
+# writes the .env beside them from GitHub secrets.
+#
+# Only Caddy is published. The web app, the API and PostgreSQL are reachable
+# solely on the compose network, so the database and the API's actuator
+# endpoints never face the internet.
+#
+#   docker compose -f docker-compose.prod.yml ps
+#   docker compose -f docker-compose.prod.yml logs -f api
+
+name: routine
+
+x-logging: &logging
+  # Bounded, so a noisy container cannot fill the VM's disk.
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:?DOMAIN must be set}
+      ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL must be set}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates live here. Losing this volume means re-issuing them, and
+      # Let's Encrypt rate-limits that.
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - web
+    logging: *logging
+
+  web:
+    image: ghcr.io/${GHCR_OWNER:?GHCR_OWNER must be set}/routine-web:${IMAGE_TAG:?IMAGE_TAG must be set}
+    restart: unless-stopped
+    environment:
+      API_INTERNAL_URL: http://api:8080
+      # The standalone server binds to $HOSTNAME, which Docker sets to the
+      # container id. Bind every interface so Caddy and the healthcheck reach it.
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:3000/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging: *logging
+
+  api:
+    image: ghcr.io/${GHCR_OWNER:?GHCR_OWNER must be set}/routine-api:${IMAGE_TAG:?IMAGE_TAG must be set}
+    restart: unless-stopped
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-routine}
+      DB_USERNAME: ${POSTGRES_USER:-routine}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+      ROUTINE_JWT_SECRET: ${ROUTINE_JWT_SECRET:?ROUTINE_JWT_SECRET must be set}
+      ROUTINE_CORS_ORIGINS: https://${DOMAIN}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # The runtime image has no curl or wget; bash's /dev/tcp is enough to ask
+      # the readiness probe, which only reports UP once Flyway has migrated.
+      test:
+        - CMD
+        - bash
+        - -c
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/8080 &&
+          printf 'GET /actuator/health/readiness HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3 &&
+          grep -q UP <&3
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 60s
+    logging: *logging
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-routine}
+      POSTGRES_USER: ${POSTGRES_USER:-routine}
+      # Read only when the volume is first initialised. Changing the secret
+      # later does not change the database's password.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-routine} -d ${POSTGRES_DB:-routine}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    logging: *logging
+
+volumes:
+  postgres-data:
+  caddy-data:
+  caddy-config:

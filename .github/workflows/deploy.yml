@@ -1,0 +1,227 @@
+# Test, build and deploy to the production VM.
+#
+#   push to main       → backend tests → build and push both images → deploy
+#   Run workflow (UI)  → same, or with `image_tag` set: skip straight to
+#                        deploying an image that was already built (rollback)
+#
+# Setup, secrets and rollback are described in docs/operations/deployment.md.
+
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Redeploy an existing image tag (a full commit SHA) instead of building. Leave empty to build."
+        required: false
+        default: ""
+
+# One deployment at a time, and never cancel one halfway through.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: ghcr.io
+  # GHCR requires lowercase image names.
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/routine
+  DEPLOY_DIR: /opt/routine
+
+jobs:
+  test:
+    name: Backend tests
+    if: ${{ !inputs.image_tag }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # The integration tests need a real PostgreSQL, as `make test` does locally.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: routine_test
+          POSTGRES_USER: routine
+          POSTGRES_PASSWORD: routine
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U routine -d routine_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+
+      - name: Run tests
+        working-directory: backend
+        env:
+          TEST_DB_URL: jdbc:postgresql://localhost:5432/routine_test
+          TEST_DB_USERNAME: routine
+          TEST_DB_PASSWORD: routine
+        run: mvn -B test
+
+  build:
+    name: Build ${{ matrix.name }} image
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      matrix:
+        include:
+          - name: api
+            context: backend
+            target: runtime
+          # `next build` type-checks, so a TypeScript error fails here.
+          - name: web
+            context: frontend
+            target: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          target: ${{ matrix.target }}
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-${{ matrix.name }}:${{ github.sha }}
+            ${{ env.IMAGE_PREFIX }}-${{ matrix.name }}:latest
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+  deploy:
+    name: Deploy to VM
+    needs: build
+    # Runs after a successful build, or on its own when redeploying a tag.
+    if: >-
+      ${{ always() &&
+          (needs.build.result == 'success' ||
+           (inputs.image_tag != '' && needs.build.result == 'skipped')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # A GitHub environment, so approvals or branch rules can be added later
+    # under Settings → Environments without editing this file.
+    environment: production
+    permissions:
+      contents: read
+      packages: read
+
+    env:
+      IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        env:
+          VM_HOST: ${{ secrets.VM_HOST }}
+          VM_USER: ${{ secrets.VM_USER }}
+          VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
+          VM_SSH_KNOWN_HOSTS: ${{ secrets.VM_SSH_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # Pinned host keys rather than StrictHostKeyChecking=no, so the key
+          # is never handed to a machine pretending to be the VM.
+          printf '%s\n' "$VM_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<EOF
+          Host vm
+            HostName $VM_HOST
+            User $VM_USER
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            ServerAliveInterval 30
+          EOF
+
+      - name: Write the production .env
+        env:
+          DOMAIN: ${{ secrets.DOMAIN }}
+          ACME_EMAIL: ${{ secrets.ACME_EMAIL }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          ROUTINE_JWT_SECRET: ${{ secrets.ROUTINE_JWT_SECRET }}
+          GHCR_OWNER: ${{ github.repository_owner }}
+        run: |
+          for name in DOMAIN ACME_EMAIL POSTGRES_PASSWORD ROUTINE_JWT_SECRET; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Repository secret $name is not set."
+              exit 1
+            fi
+          done
+          umask 077
+          # Single-quoted so compose takes each value literally, `$` included.
+          cat > .env.production <<EOF
+          IMAGE_TAG='$IMAGE_TAG'
+          GHCR_OWNER='$GHCR_OWNER'
+          DOMAIN='$DOMAIN'
+          ACME_EMAIL='$ACME_EMAIL'
+          POSTGRES_PASSWORD='$POSTGRES_PASSWORD'
+          ROUTINE_JWT_SECRET='$ROUTINE_JWT_SECRET'
+          EOF
+
+      - name: Upload the stack
+        run: |
+          scp infrastructure/docker/docker-compose.prod.yml \
+              infrastructure/docker/Caddyfile \
+              infrastructure/deployment/deploy.sh \
+              vm:"$DEPLOY_DIR/"
+          scp .env.production vm:"$DEPLOY_DIR/.env"
+          ssh vm "chmod 600 '$DEPLOY_DIR/.env'"
+
+      - name: Pull and restart
+        env:
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # The token only lives as long as this job, so the VM logs in for the
+          # pull and out again straight after.
+          printf '%s' "$GHCR_TOKEN" | ssh vm "docker login $REGISTRY -u '$GHCR_USER' --password-stdin"
+          if ssh vm "bash '$DEPLOY_DIR/deploy.sh'"; then status=0; else status=$?; fi
+          ssh vm "docker logout $REGISTRY" || true
+          exit $status
+
+      - name: Check the site responds
+        env:
+          DOMAIN: ${{ secrets.DOMAIN }}
+        run: |
+          # Caddy may still be finishing the first certificate on a fresh VM.
+          for _ in $(seq 1 20); do
+            if curl -fsS -o /dev/null --max-time 10 "https://$DOMAIN/"; then
+              echo "https://$DOMAIN is up."
+              exit 0
+            fi
+            sleep 6
+          done
+          echo "::error::https://$DOMAIN did not respond after deploying."
+          exit 1
+
+      - name: Remove credentials
+        if: always()
+        run: rm -f ~/.ssh/deploy_key .env.production

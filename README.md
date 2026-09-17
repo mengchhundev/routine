@@ -16,6 +16,7 @@ Goal → Plan → Routine → Daily Task → Completion → Reflection → Progr
 - [Configuration](#configuration)
 - [Testing](#testing)
 - [Layout](#layout)
+- [Deployment](#deployment)
 - [Architecture decisions](#architecture-decisions)
 - [Documentation](#documentation)
 - [Product philosophy](#product-philosophy)
@@ -58,7 +59,7 @@ behind it.
 | --- | --- |
 | Repository, module structure, Docker development environment | Password reset, email verification |
 | Full database schema (Flyway) | Email delivery for reminders |
-| Registration, login, refresh, logout; profile and settings | CI/CD, staging deployment |
+| Registration, login, refresh, logout; profile and settings | Staging environment, automated database backups |
 | Task CRUD, complete / skip / reopen / reschedule | Habit tracking, templates, import/export |
 | Routines, schedules, and daily task generation | Calendar integration; AI features |
 | Goals with a detail page; nested milestones, spans, derived progress | |
@@ -66,6 +67,7 @@ behind it.
 | Reminders, with a background dispatcher and delivery log | |
 | Planner: day, week and month | |
 | Dashboard and analytics, both derived on read | |
+| CI/CD: GitHub Actions deploys containers to a GCP VM | |
 | Today, Tasks, Routines, Planner, Goals, Notes, Reminders, Analytics, Settings | |
 
 The two remaining account features — password reset and email verification —
@@ -167,11 +169,22 @@ routine/
 │   ├── app/api/        route handlers: auth cookies and the API proxy
 │   ├── components/     UI, grouped by screen
 │   └── lib/            API client, session, dates, per-feature helpers
-├── infrastructure/     placeholders for deployment, monitoring, backups
+├── .github/workflows/  CI/CD: test, build images, deploy to the VM
+├── infrastructure/     production compose file, Caddyfile, VM scripts
 ├── docs/               architecture, api, operations, product
 ├── docker-compose.yml  the whole development stack
 └── Makefile            shortcuts over docker compose
 ```
+
+## Deployment
+
+Every push to `main` runs the backend tests, builds the `api` and `web` images
+into GitHub Container Registry, and deploys them to a GCP VM over SSH. On the VM,
+Caddy serves the site over HTTPS in front of the web app, the API and
+PostgreSQL. A failed test, build or health check stops the deploy.
+
+First-time setup (VM, DNS, SSH key, GitHub secrets), rollback and backups are in
+[docs/operations/deployment.md](docs/operations/deployment.md).
 
 ## Architecture decisions
 
@@ -200,12 +213,13 @@ The short version:
 | --- | --- |
 | [ROUTINE-PROPOSAL.md](ROUTINE-PROPOSAL.md) | Problem, users, features, MVP scope, roadmap |
 | [docs/operations/local-development.md](docs/operations/local-development.md) | Setup, commands, configuration, troubleshooting |
+| [docs/operations/deployment.md](docs/operations/deployment.md) | Production on a GCP VM: setup, secrets, rollback, backups |
 | [docs/architecture/decisions.md](docs/architecture/decisions.md) | Why the code is shaped the way it is |
 | [docs/api/auth.md](docs/api/auth.md) | Token model, auth and user endpoints, error shape |
 | [docs/api/tasks-and-dashboard.md](docs/api/tasks-and-dashboard.md) | Tasks, goals, milestones, notes, daily review, dashboard |
 | [docs/api/routines.md](docs/api/routines.md) | Routines, schedules, steps, generation |
 | [docs/api/planner-and-analytics.md](docs/api/planner-and-analytics.md) | Week and month planner, analytics, reminders |
-| [infrastructure/README.md](infrastructure/README.md) | Planned production topology |
+| [infrastructure/README.md](infrastructure/README.md) | What each infrastructure directory holds |
 
 ## Product philosophy
 
