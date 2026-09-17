@@ -150,8 +150,43 @@ jobs:
           VM_HOST="$(printf '%s' "$VM_HOST" | tr -d '[:space:]')"
 
           install -m 700 -d ~/.ssh
-          printf '%s\n' "$VM_SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
+          # Pasting through a browser can add CRLFs and indentation; neither is
+          # ever part of a key, so both are removed.
+          printf '%s\n' "$VM_SSH_KEY" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//; /^$/d' \
+            > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
+
+          # Say what is wrong with the key rather than leave it to ssh's
+          # "error in libcrypto". Nothing here prints the key itself.
+          lines=$(wc -l < ~/.ssh/deploy_key | tr -d ' ')
+          first=$(head -n 1 ~/.ssh/deploy_key)
+          if [ "$lines" -eq 1 ] && printf '%s' "$first" | grep -q -- '-----BEGIN .*-----END'; then
+            echo "::error::VM_SSH_KEY was pasted as a single line; its line breaks were lost. Copy the file with: pbcopy < ~/.ssh/id_ed25519"
+            exit 1
+          fi
+          case "$first" in
+            ssh-ed25519\ *|ssh-rsa\ *|ecdsa-sha2-*)
+              echo "::error::VM_SSH_KEY holds a PUBLIC key (the .pub file). It needs the PRIVATE key: pbcopy < ~/.ssh/id_ed25519"
+              exit 1 ;;
+            -----BEGIN*PRIVATE\ KEY-----) ;;
+            *)
+              echo "::error::VM_SSH_KEY does not start with a '-----BEGIN ... PRIVATE KEY-----' line on its own ($lines lines found). Copy the file with: pbcopy < ~/.ssh/id_ed25519"
+              exit 1 ;;
+          esac
+          if ! tail -n 1 ~/.ssh/deploy_key | grep -q -- '^-----END .*PRIVATE KEY-----$'; then
+            echo "::error::VM_SSH_KEY does not end with its '-----END ... PRIVATE KEY-----' line ($lines lines found). It was copied incompletely."
+            exit 1
+          fi
+          if ! ssh-keygen -y -P "" -f ~/.ssh/deploy_key > ~/.ssh/deploy_key.pub 2> ~/.ssh/keygen.err; then
+            if grep -qi passphrase ~/.ssh/keygen.err; then
+              echo "::error::VM_SSH_KEY is protected by a passphrase, which Actions cannot type. Use a key created with -N \"\"."
+            else
+              echo "::error::VM_SSH_KEY has the right first and last lines but its body is damaged ($lines lines found; an ed25519 key is usually 7-8). Re-copy it with: pbcopy < ~/.ssh/id_ed25519"
+            fi
+            exit 1
+          fi
+          # A fingerprint is public: compare it with `ssh-keygen -lf ~/.ssh/id_ed25519.pub`.
+          echo "Deploy key loaded: $(ssh-keygen -lf ~/.ssh/deploy_key.pub)"
 
           # Pinned host keys rather than StrictHostKeyChecking=no, so the key
           # is never handed to a machine pretending to be the VM.
