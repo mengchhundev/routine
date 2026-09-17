@@ -1,0 +1,72 @@
+spring:
+  application:
+    name: routine-api
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/routine}
+    username: ${DB_USERNAME:routine}
+    password: ${DB_PASSWORD:routine}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+
+  jpa:
+    # Flyway owns the schema. Hibernate only verifies that its mapping agrees
+    # with the migrated database and fails fast on drift.
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+  jackson:
+    default-property-inclusion: non_null
+
+server:
+  port: ${SERVER_PORT:8080}
+  error:
+    include-message: never
+    include-stacktrace: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+routine:
+  auth:
+    # Base64 of a >=256-bit secret. Deliberately has no default: an unset or
+    # blank ROUTINE_JWT_SECRET fails startup rather than falling back to a key
+    # that is published in this repository. docker-compose.yml supplies a
+    # throwaway value for local development.
+    jwt-secret: ${ROUTINE_JWT_SECRET}
+    issuer: routine
+    access-token-ttl: ${ROUTINE_ACCESS_TOKEN_TTL:PT15M}
+    refresh-token-ttl: ${ROUTINE_REFRESH_TOKEN_TTL:P30D}
+  cors:
+    allowed-origins: ${ROUTINE_CORS_ORIGINS:http://localhost:3000}
+  reminders:
+    # A kill switch that does not need a redeploy, and the off switch the test
+    # profile uses so a suite never races the dispatcher.
+    enabled: ${ROUTINE_REMINDERS_ENABLED:true}
+    poll-interval: ${ROUTINE_REMINDERS_POLL_INTERVAL:PT1M}
+    initial-delay: PT30S
+    batch-size: 50
+    max-attempts: 3
+    # Past this, a reminder is recorded as missed instead of arriving at a time
+    # when it can no longer be acted on.
+    grace-window: PT6H
+
+logging:
+  level:
+    com.routine: ${LOG_LEVEL:INFO}

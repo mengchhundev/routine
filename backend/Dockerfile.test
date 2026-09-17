@@ -1,0 +1,9 @@
+# Test runner. The source tree and the Maven cache are mounted at run time, so
+# this image only needs the toolchain and a warm dependency set.
+FROM maven:3.9-eclipse-temurin-21
+WORKDIR /app
+
+COPY pom.xml .
+RUN mvn -B -q dependency:go-offline
+
+CMD ["mvn", "-B", "test"]

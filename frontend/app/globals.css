@@ -1,0 +1,428 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------- theme ----
+   One scale, defined once. Colours are named by role — canvas, surface, ink,
+   line — not by hue, so the dark theme is a re-mapping rather than a rewrite,
+   and no component needs to know which theme is active. */
+
+@theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  /* Backgrounds, back to front. */
+  --color-canvas: #fbfaf9;
+  --color-surface: #ffffff;
+  --color-raised: #ffffff;
+
+  /* Hairlines. `line` is structural, `line-strong` is for emphasis and hover. */
+  --color-line: #e8e6e1;
+  --color-line-strong: #d6d3cc;
+
+  /* Text, most to least prominent. */
+  --color-ink: #16161a;
+  --color-muted: #6b6862;
+  --color-faint: #97938c;
+
+  /* One accent, used sparingly: primary actions and progress only. */
+  --color-accent: #4a3aff;
+  --color-accent-hover: #3d2fdb;
+  --color-accent-ink: #ffffff;
+  --color-accent-soft: #eeecff;
+
+  --color-positive: #12805c;
+  --color-positive-soft: #e3f5ee;
+  --color-danger: #c62f36;
+  --color-danger-soft: #fdeceb;
+
+  --radius-card: 0.875rem;
+  --radius-panel: 1.25rem;
+
+  /* Shadows stay barely-there: the design separates with hairlines and space,
+     and reserves elevation for things that genuinely float. */
+  --shadow-card: 0 1px 2px rgb(22 22 26 / 0.04), 0 1px 3px rgb(22 22 26 / 0.03);
+  --shadow-lift: 0 4px 12px rgb(22 22 26 / 0.06), 0 12px 32px rgb(22 22 26 / 0.06);
+
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Dark theme overrides the emitted custom properties directly. A nested @theme
+   block is not supported, and would silently produce a single flat palette. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-canvas: #0c0c0e;
+    --color-surface: #141417;
+    --color-raised: #1b1b1f;
+
+    --color-line: #26262b;
+    --color-line-strong: #35353c;
+
+    --color-ink: #f4f3f1;
+    --color-muted: #a3a09a;
+    --color-faint: #6f6c67;
+
+    --color-accent: #8b7dff;
+    --color-accent-hover: #a094ff;
+    --color-accent-ink: #14121f;
+    --color-accent-soft: #1e1b33;
+
+    --color-positive: #2eab84;
+    --color-positive-soft: #10231d;
+    --color-danger: #ff7b7b;
+    --color-danger-soft: #2a1414;
+  }
+}
+
+/* An explicit choice wins over the OS preference in both directions. */
+:root[data-theme="dark"] {
+  --color-canvas: #0c0c0e;
+  --color-surface: #141417;
+  --color-raised: #1b1b1f;
+  --color-line: #26262b;
+  --color-line-strong: #35353c;
+  --color-ink: #f4f3f1;
+  --color-muted: #a3a09a;
+  --color-faint: #6f6c67;
+  --color-accent: #8b7dff;
+  --color-accent-hover: #a094ff;
+  --color-accent-ink: #14121f;
+  --color-accent-soft: #1e1b33;
+  --color-positive: #2eab84;
+  --color-positive-soft: #10231d;
+  --color-danger: #ff7b7b;
+  --color-danger-soft: #2a1414;
+}
+
+:root[data-theme="light"] {
+  --color-canvas: #fbfaf9;
+  --color-surface: #ffffff;
+  --color-raised: #ffffff;
+  --color-line: #e8e6e1;
+  --color-line-strong: #d6d3cc;
+  --color-ink: #16161a;
+  --color-muted: #6b6862;
+  --color-faint: #97938c;
+  --color-accent: #4a3aff;
+  --color-accent-hover: #3d2fdb;
+  --color-accent-ink: #ffffff;
+  --color-accent-soft: #eeecff;
+  --color-positive: #12805c;
+  --color-positive-soft: #e3f5ee;
+  --color-danger: #c62f36;
+  --color-danger-soft: #fdeceb;
+}
+
+/* ----------------------------------------------------------------- base ----- */
+
+@layer base {
+  html {
+    color-scheme: light dark;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    /* Tabular figures keep progress percentages from jittering as they count. */
+    font-feature-settings: "cv05" 1, "ss01" 1;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Visible only for keyboard users, but unmissable when it is. */
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+    border-radius: 0.25rem;
+  }
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  ::selection {
+    background-color: var(--color-accent-soft);
+    color: var(--color-ink);
+  }
+
+  h1, h2, h3 {
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+}
+
+/* ----------------------------------------------------------- components ---- */
+
+@layer components {
+  /* Two button shapes cover the whole product. Anything needing a third is
+     probably a link. */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5
+           text-sm font-medium whitespace-nowrap
+           transition-[background-color,border-color,color,box-shadow,transform]
+           duration-150 ease-out
+           disabled:pointer-events-none disabled:opacity-55;
+  }
+
+  .btn-primary {
+    background-color: var(--color-accent);
+    color: var(--color-accent-ink);
+  }
+  .btn-primary:hover {
+    background-color: var(--color-accent-hover);
+  }
+  .btn-primary:active {
+    transform: translateY(0.5px);
+  }
+
+  .btn-secondary {
+    background-color: var(--color-surface);
+    color: var(--color-ink);
+    border: 1px solid var(--color-line);
+    box-shadow: var(--shadow-card);
+  }
+  .btn-secondary:hover {
+    border-color: var(--color-line-strong);
+  }
+
+  .btn-ghost {
+    color: var(--color-muted);
+  }
+  .btn-ghost:hover {
+    color: var(--color-ink);
+    background-color: var(--color-accent-soft);
+  }
+
+  .card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-panel);
+    box-shadow: var(--shadow-card);
+  }
+}
+
+/* --------------------------------------------------- collapsible rail ----- */
+
+/* One attribute on the root drives the whole change: the layout grid, the
+   labels and the tooltips all key off it, so an inline script can apply the
+   stored preference before first paint and nothing flashes wide-then-narrow. */
+:root {
+  --nav-width: 14rem;
+}
+
+@media (min-width: 80rem) {
+  :root {
+    --nav-width: 15rem;
+  }
+}
+
+@media (min-width: 96rem) {
+  :root {
+    --nav-width: 17rem;
+  }
+}
+
+/* Higher specificity than the media queries above, so it wins at every width
+   without depending on source order. */
+:root[data-nav="collapsed"] {
+  --nav-width: 4rem;
+}
+
+/* Scoped to .nav-rail: the mobile drawer shows the same list and must stay
+   expanded there, where there is no rail to collapse. */
+/* Headings and the footnote are decoration — they can go entirely. */
+:root[data-nav="collapsed"] .nav-rail .nav-block-label {
+  display: none;
+}
+
+/* Item labels are the accessible name of the link. display:none would strip
+   them from the accessibility tree and leave a row of unnamed icons, so they
+   are hidden visually and kept for assistive technology. */
+:root[data-nav="collapsed"] .nav-rail .nav-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+:root[data-nav="collapsed"] .nav-rail .nav-item {
+  justify-content: center;
+  gap: 0;
+  padding-inline: 0;
+}
+
+/* Icons alone need less gutter than labelled rows do. */
+:root[data-nav="collapsed"] .nav-rail .nav-pad {
+  padding-inline: 0.5rem;
+}
+
+/* The tooltips below sit outside the rail, and `overflow-y: auto` clips
+   horizontally too — a scrolling list would shear them off at the border. The
+   collapsed rail is nine icon rows, so it drops the scroll instead; only the
+   expanded rail, where nothing overhangs and the labels make it taller, keeps
+   it. Below roughly 550px of viewport height the collapsed list is cut off
+   rather than scrolled, which no laptop reaches. */
+:root[data-nav="collapsed"] .nav-rail .nav-scroll {
+  overflow: visible;
+}
+
+/* The label's stand-in once the label is gone. */
+.nav-tip {
+  position: absolute;
+  left: calc(100% + 0.5rem);
+  top: 50%;
+  z-index: 30;
+  display: none;
+  transform: translateY(-50%);
+  border: 1px solid var(--color-line);
+  border-radius: 0.5rem;
+  background-color: var(--color-surface);
+  padding: 0.25rem 0.5rem;
+  color: var(--color-ink);
+  font-size: 0.75rem;
+  white-space: nowrap;
+  box-shadow: var(--shadow-lift);
+  pointer-events: none;
+}
+
+:root[data-nav="collapsed"] .nav-rail .nav-item:hover .nav-tip,
+:root[data-nav="collapsed"] .nav-rail .nav-item:focus-visible .nav-tip {
+  display: block;
+}
+
+/* ------------------------------------------------------- today board ------ */
+
+/* The split lives in a custom property rather than an inline
+   `grid-template-columns`, because an inline style would also apply below the
+   breakpoint — where there is one stacked column and no split to honour. Each
+   track gives up half the gap so the two still add up to the full width. */
+.panel-board {
+  /* A fallback, so a missing inline value degrades to the default split rather
+     than to an invalid `grid-template-columns` and a single column. */
+  --split: 58;
+  position: relative;
+  display: grid;
+  gap: 1rem;
+}
+
+@media (min-width: 64rem) {
+  .panel-board {
+    grid-template-columns:
+      minmax(0, calc(var(--split) * 1% - 0.5rem))
+      minmax(0, calc((100 - var(--split)) * 1% - 0.5rem));
+  }
+
+  /* Everything ended up in one column, so that column is the board. Its own
+     track rather than a 100% split: a zero-width second track still collects
+     the grid gap, which would leave a sliver of dead space at the edge. */
+  .panel-board-single {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Sits in the gap between the two columns, centred on the split. */
+.panel-split {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--split) * 1%);
+  width: 1rem;
+  transform: translateX(-50%);
+}
+
+/* ------------------------------------------------------------- motion ----- */
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* The box overshoots a touch as it fills — the small physical acknowledgement
+   a checkbox gives when it takes the tick. */
+@keyframes check-pop {
+  0% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.22);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Bars and meters arrive by growing from their own baseline, so the shape the
+   eye follows is the one the value describes. Transform rather than height or
+   width: those animate on the layout thread and stutter under a full page of
+   entrances. */
+@keyframes grow-up {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes grow-right {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@layer utilities {
+  .animate-grow-up {
+    transform-origin: bottom;
+    animation: grow-up 0.6s var(--ease-out-soft) both;
+  }
+
+  .animate-grow-right {
+    transform-origin: left;
+    animation: grow-right 0.7s var(--ease-out-soft) both;
+  }
+
+  /* Used only for first-paint entrances, never on interaction. */
+  .animate-rise {
+    animation: rise 0.5s var(--ease-out-soft) both;
+  }
+
+  .animate-check-pop {
+    animation: check-pop 0.34s var(--ease-out-soft);
+  }
+}
+
+/* The Today preview loops, and between cycles it jumps back to an empty day.
+   Without this the bars would visibly drain, the ticks would un-draw and the
+   strikethroughs would retract — five seconds of the card running backwards.
+   The attribute is set for a single frame, purely to carry this rule. */
+.day-loop[data-rewinding] *,
+.day-loop[data-rewinding] *::before,
+.day-loop[data-rewinding] *::after {
+  transition: none !important;
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

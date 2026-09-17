@@ -1,0 +1,28 @@
+# Profile-specific, so it layers on top of the main application.yml rather than
+# replacing it. A plain src/test/resources/application.yml would shadow the main
+# file entirely and silently drop every other setting.
+#
+# Integration tests must therefore carry @ActiveProfiles("test").
+#
+# Tests run against a real, disposable PostgreSQL — the `postgres-test` service
+# in docker-compose.yml, on a tmpfs so it starts empty every time. A real server
+# is required, not an in-memory stand-in: the schema uses partial unique indexes,
+# array columns and GIN full-text indexes that only PostgreSQL provides.
+spring:
+  datasource:
+    url: ${TEST_DB_URL:jdbc:postgresql://localhost:5433/routine_test}
+    username: ${TEST_DB_USERNAME:routine}
+    password: ${TEST_DB_PASSWORD:routine}
+
+routine:
+  auth:
+    # Throwaway signing key for tests. Production has no default at all.
+    jwt-secret: dGVzdC1vbmx5LXNpZ25pbmcta2V5LWZvci1yb3V0aW5lLXRlc3RzLTEyMzQ=
+  reminders:
+    # The dispatcher's poll is off; the reminder test drives it directly, so a
+    # background tick cannot deliver a reminder the test is still setting up.
+    enabled: false
+
+logging:
+  level:
+    org.hibernate.SQL: WARN
