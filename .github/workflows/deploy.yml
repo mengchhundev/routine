@@ -146,20 +146,60 @@ jobs:
           VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
           VM_SSH_KNOWN_HOSTS: ${{ secrets.VM_SSH_KNOWN_HOSTS }}
         run: |
+          # Trailing whitespace or a pasted newline in VM_HOST breaks the lookup.
+          VM_HOST="$(printf '%s' "$VM_HOST" | tr -d '[:space:]')"
+
           install -m 700 -d ~/.ssh
-          printf '%s\n' "$VM_SSH_KEY" > ~/.ssh/deploy_key
+          printf '%s\n' "$VM_SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
+
           # Pinned host keys rather than StrictHostKeyChecking=no, so the key
           # is never handed to a machine pretending to be the VM.
-          printf '%s\n' "$VM_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          #
+          # Each line's host field is replaced with a fixed alias, and SSH is
+          # told to look the VM up by that alias. What gets checked is the key
+          # itself; whether the secret was scanned by IP, by DNS name or from
+          # the VM as "localhost" no longer matters.
+          printf '%s\n' "$VM_SSH_KNOWN_HOSTS" | tr -d '\r' \
+            | awk 'NF >= 3 && $1 !~ /^#/ { print "routine-vm", $2, $3 }' \
+            > ~/.ssh/known_hosts
+
+          if [ ! -s ~/.ssh/known_hosts ]; then
+            echo "::error::VM_SSH_KNOWN_HOSTS has no key lines. Set it to the output of: ssh-keyscan -t ed25519,rsa <VM IP>"
+            exit 1
+          fi
+
           cat > ~/.ssh/config <<EOF
           Host vm
             HostName $VM_HOST
+            HostKeyAlias routine-vm
             User $VM_USER
             IdentityFile ~/.ssh/deploy_key
             IdentitiesOnly yes
             ServerAliveInterval 30
+            ConnectTimeout 20
           EOF
+
+      - name: Check the VM's host key
+        env:
+          VM_HOST: ${{ secrets.VM_HOST }}
+        run: |
+          VM_HOST="$(printf '%s' "$VM_HOST" | tr -d '[:space:]')"
+          if ssh vm true; then
+            echo "Connected to the VM."
+            exit 0
+          fi
+
+          # Fingerprints are public, so both sides can be printed safely.
+          echo "::group::Host key fingerprints"
+          echo "The VM at $VM_HOST presents:"
+          ssh-keyscan -T 15 -t ed25519,rsa "$VM_HOST" 2>/dev/null | ssh-keygen -lf - || echo "  (nothing: port 22 unreachable from GitHub)"
+          echo
+          echo "VM_SSH_KNOWN_HOSTS expects:"
+          ssh-keygen -lf ~/.ssh/known_hosts
+          echo "::endgroup::"
+          echo "::error::Could not connect to the VM. If the fingerprints differ, update VM_SSH_KNOWN_HOSTS. If they match, check VM_USER and VM_SSH_KEY."
+          exit 1
 
       - name: Write the production .env
         env:
