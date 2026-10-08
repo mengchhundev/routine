@@ -1,6 +1,6 @@
 # Test runner. The source tree and the Maven cache are mounted at run time, so
 # this image only needs the toolchain and a warm dependency set.
-FROM maven:3.9-eclipse-temurin-21@sha256:82e2ff483b3d5a95c351379f50aff9b50263579117c2b1c090dc7cfcce6216fb
+FROM maven:3.9-eclipse-temurin-26@sha256:b2c1ad85954592f9928e84327c65201f308ad9b5d8ed7d5b823717c97bf23fbb
 WORKDIR /app
 
 COPY pom.xml .
