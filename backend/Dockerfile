@@ -5,7 +5,7 @@
 # enforcer rules in pom.xml refuse repositories other than Maven Central.
 
 # ---------------------------------------------------------------- build ----
-FROM maven:3.9-eclipse-temurin-21@sha256:82e2ff483b3d5a95c351379f50aff9b50263579117c2b1c090dc7cfcce6216fb AS build
+FROM maven:3.9-eclipse-temurin-26@sha256:b2c1ad85954592f9928e84327c65201f308ad9b5d8ed7d5b823717c97bf23fbb AS build
 WORKDIR /build
 
 # Dependencies are their own layer so source edits do not re-download Maven Central.
